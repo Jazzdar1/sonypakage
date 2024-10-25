@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced M3U Player</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #333;
+            color: #fff;
+            text-align: center;
+        }
+
+        .channel-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 10px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .channel-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            cursor: pointer;
+            background: #444;
+            padding: 10px;
+            border-radius: 10px;
+            transition: transform 0.2s;
+        }
+
+        .channel-item:hover {
+            transform: scale(1.05);
+        }
+
+        .channel-item img {
+            width: 100px;
+            height: 100px;
+            object-fit: cover;
+            border-radius: 50%;
+            margin-bottom: 10px;
+        }
+
+        .channel-item span {
+            font-size: 14px;
+            text-align: center;
+        }
+
+        #player-modal {
+            display: none;
+            position: fixed;
+            z-index: 9999;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+        }
+
+        #player-content {
+            position: relative;
+            margin: 5% auto;
+            padding: 0;
+            width: 80%;
+            max-width: 800px;
+        }
+
+        #player-content video {
+            width: 100%;
+            height: auto;
+        }
+
+        #close-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 24px;
+            color: white;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h1>Advanced M3U Player</h1>
+
+    <div id="channel-list" class="channel-grid"></div>
+
+    <!-- Modal for Video Player -->
+    <div id="player-modal">
+        <div id="player-content">
+            <span id="close-btn">&times;</span>
+            <div id="video-player"></div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <script>
+        function parseM3U(playlistURL) {
+            return fetch(playlistURL)
+                .then(response => response.text())
+                .then(data => {
+                    const lines = data.split("\n");
+                    const channels = [];
+                    let channelInfo = {};
+
+                    lines.forEach((line) => {
+                        if (line.startsWith("#EXTINF")) {
+                            const info = line.split(",");
+                            const attributes = info[0].split(" ");
+                            const logo = attributes.find(attr => attr.includes("tvg-logo"));
+                            channelInfo.title = info[1].trim();
+                            channelInfo.logo = logo ? logo.split('=')[1].replace(/"/g, '') : "default-logo.png";
+                        } else if (line.startsWith("http") || line.endsWith(".m3u8")) {
+                            channelInfo.url = line.trim();
+                            channels.push(channelInfo);
+                            channelInfo = {};
+                        }
+                    });
+
+                    return channels;
+                });
+        }
+
+        function displayChannels(channels) {
+            const container = document.getElementById("channel-list");
+
+            channels.forEach((channel) => {
+                const channelElement = document.createElement("div");
+                channelElement.className = "channel-item";
+                channelElement.innerHTML = `
+                    <img src="${channel.logo}" alt="${channel.title}" />
+                    <span>${channel.title}</span>
+                `;
+                channelElement.onclick = () => openPopupPlayer(channel.url);
+
+                container.appendChild(channelElement);
+            });
+        }
+
+        function openPopupPlayer(url) {
+            const modal = document.getElementById("player-modal");
+            const videoContainer = document.getElementById("video-player");
+
+            modal.style.display = "block";
+            videoContainer.innerHTML = ''; // Clear previous player
+
+            const video = document.createElement("video");
+            video.controls = true;
+            video.autoplay = true;
+            videoContainer.appendChild(video);
+
+            if (Hls.isSupported()) {
+                const hls = new Hls();
+                hls.loadSource(url);
+                hls.attachMedia(video);
+                hls.on(Hls.Events.MANIFEST_PARSED, function () {
+                    video.play();
+                });
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                video.src = url;
+                video.addEventListener('loadedmetadata', function () {
+                    video.play();
+                });
+            }
+        }
+
+        function closePopup() {
+            const modal = document.getElementById("player-modal");
+            const videoContainer = document.getElementById("video-player");
+
+            modal.style.display = "none";
+            videoContainer.innerHTML = ''; // Stop and clear video
+        }
+
+        document.getElementById("close-btn").onclick = closePopup;
+        window.onclick = function(event) {
+            const modal = document.getElementById("player-modal");
+            if (event.target == modal) {
+                closePopup();
+            }
+        }
+
+        const playlistURL = 'https://raw.githubusercontent.com/SArun61/IPTV/refs/heads/main/SonyLiv.m3u';
+
+        parseM3U(playlistURL).then(channels => {
+            displayChannels(channels);
+        });
+    </script>
+</body>
+</html>
